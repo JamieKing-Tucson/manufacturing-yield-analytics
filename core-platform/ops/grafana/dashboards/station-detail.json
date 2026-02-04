@@ -1,0 +1,349 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 3,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "default": false,
+        "type": "trino-datasource",
+        "uid": "PD73EC80E50767796"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "PD73EC80E50767796"
+          },
+          "format": 0,
+          "rawSQL": "SELECT\n  event_date AS time,\n  SUM(pass_tests) AS pass,\n  SUM(total_tests - pass_tests) AS fail\nFROM iceberg.gold.daily_yield\nWHERE $__timeFilter(event_date)\n  AND station = ${station:sqlstring}\nGROUP BY event_date\nORDER BY event_date\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Pass vs Fail – Station",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "default": false,
+        "type": "trino-datasource",
+        "uid": "PD73EC80E50767796"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "PD73EC80E50767796"
+          },
+          "format": 0,
+          "rawSQL": "WITH daily AS (\n  SELECT\n    event_date,\n    SUM(pass_tests) AS pass_tests,\n    SUM(total_tests) AS total_tests\n  FROM iceberg.gold.daily_yield\n  WHERE $__timeFilter(event_date)\n    AND station = ${station:sqlstring}\n  GROUP BY event_date\n)\nSELECT\n  CAST(event_date AS TIMESTAMP) AS time,\n  CAST(\n    100.0 * SUM(pass_tests) OVER (ORDER BY event_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)\n    / NULLIF(SUM(total_tests) OVER (ORDER BY event_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 0)\n    AS DOUBLE\n  ) AS rolling_yield\nFROM daily\nORDER BY time\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Rolling 7-Day Yield (%) – Station",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "default": false,
+        "type": "trino-datasource",
+        "uid": "PD73EC80E50767796"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "PD73EC80E50767796"
+          },
+          "format": 0,
+          "rawSQL": "SELECT\n  event_date AS time,\n  CAST(\n    100.0 * SUM(pass_tests) / NULLIF(SUM(total_tests), 0)\n    AS DOUBLE\n  ) AS value\nFROM iceberg.gold.daily_yield\nWHERE $__timeFilter(event_date)\n  AND station = ${station:sqlstring}\nGROUP BY event_date\nORDER BY event_date\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily Yield (%) – Station",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "RF-FT1",
+          "value": "RF-FT1"
+        },
+        "datasource": {
+          "type": "trino-datasource",
+          "uid": "PD73EC80E50767796"
+        },
+        "definition": "SELECT DISTINCT station\nFROM iceberg.gold.daily_yield\nORDER BY station\n",
+        "hide": 0,
+        "includeAll": false,
+        "label": "station",
+        "multi": false,
+        "name": "station",
+        "options": [],
+        "query": {
+          "query": "SELECT DISTINCT station\nFROM iceberg.gold.daily_yield\nORDER BY station\n",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Station Detail",
+  "uid": "bfbr3q6vqz30gd",
+  "version": 9,
+  "weekStart": ""
+}

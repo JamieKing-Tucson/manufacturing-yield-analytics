@@ -1,0 +1,102 @@
+services:
+  kafka-connect:
+    container_name: kafka-connect
+    build:
+      context: ./phase3/connect
+      dockerfile: Dockerfile
+    image: local/kafka-connect-iceberg:7.6.0
+
+    depends_on:
+      redpanda-1:
+        condition: service_started
+      schema-registry:
+        condition: service_started
+
+    networks:
+      - itar-core
+   
+    ports:
+      - "8083:8083"
+
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        echo "Starting Kafka Connect directly (skipping kafka-ready)..."
+        /etc/confluent/docker/configure
+        /etc/confluent/docker/launch
+
+    environment:
+      # ------------------------------------------------------------
+      # Kafka Connect REST (bind + host access)
+      # ------------------------------------------------------------
+      CONNECT_REST_PORT: "8083"
+      CONNECT_LISTENERS: "http://0.0.0.0:8083"
+
+      # Advertise localhost so Windows host curl works
+      CONNECT_REST_ADVERTISED_HOST_NAME: "localhost"
+      CONNECT_REST_ADVERTISED_PORT: "8083"
+
+      # ------------------------------------------------------------
+      # Kafka bootstrap (REQUIRED by Confluent preflight kafka-ready)
+      # ------------------------------------------------------------
+      # Used by Confluent startup scripts
+      BOOTSTRAP_SERVERS: "redpanda-1:9092,redpanda-2:9092,redpanda-3:9092"
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda-1:9092,redpanda-2:9092,redpanda-3:9092"
+
+      # 👉 Add THESE TWO LINES right here 👇
+      KAFKA_READY_BOOTSTRAP_SERVERS: "redpanda-1:9092,redpanda-2:9092,redpanda-3:9092"
+      SKIP_PRECHECK: "true"
+
+      # Used by Kafka Connect itself
+      CONNECT_BOOTSTRAP_SERVERS: "redpanda-1:9092,redpanda-2:9092,redpanda-3:9092"
+      CONNECT_GROUP_ID: "connect-cluster"
+      
+      # REQUIRED for Iceberg S3FileIO (MinIO still needs a region)
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "minioadmin"
+      AWS_SECRET_ACCESS_KEY: "minioadmin123"
+      AWS_EC2_METADATA_DISABLED: "true"
+
+      # ------------------------------------------------------------
+      # Internal Kafka Connect topics
+      # ------------------------------------------------------------
+      CONNECT_CONFIG_STORAGE_TOPIC: "_connect-configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "_connect-offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "_connect-status"
+
+      # Single-node friendly (Redpanda default)
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+
+      # ------------------------------------------------------------
+      # Converters (JSON, schemas disabled)
+      # ------------------------------------------------------------
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+
+      # ------------------------------------------------------------
+      # Plugin path (Iceberg Kafka Connect runtime)
+      # ------------------------------------------------------------
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/java/iceberg-kafka-connect"
+
+      # ------------------------------------------------------------
+      # Logging
+      # ------------------------------------------------------------
+      CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+      CONNECT_LOG4J_LOGGERS: "org.reflections=ERROR"
+
+
+    restart: unless-stopped
+
+
+networks:
+  itar-core:
+    external: true
+    name: core-platform_itar-core

@@ -1,0 +1,374 @@
+name: core-platform
+services:
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8082"
+        protocol: tcp
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/run
+        target: /var/run
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /sys
+        target: /sys
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/lib/docker/
+        target: /var/lib/docker
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /dev/disk/
+        target: /dev/disk
+        read_only: true
+        bind:
+          create_host_path: true
+  console:
+    command:
+      - --config.filepath=/etc/console.yaml
+    container_name: rp-console
+    depends_on:
+      redpanda-1:
+        condition: service_started
+        required: true
+      schema-registry:
+        condition: service_started
+        required: true
+    entrypoint:
+      - /app/console
+    image: redpandadata/console:v2.4.5
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8080"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\Users\jking\Desktop\itar-data-platform\site-a\core-platform\console-config.yaml
+        target: /etc/console.yaml
+        read_only: true
+        bind:
+          create_host_path: true
+  grafana:
+    container_name: grafana
+    depends_on:
+      loki:
+        condition: service_started
+        required: true
+      prometheus:
+        condition: service_started
+        required: true
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_PASSWORD: changeme
+      GF_SECURITY_ADMIN_USER: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    image: grafana/grafana:11.2.0
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: grafana-data
+        target: /var/lib/grafana
+        volume: {}
+      - type: bind
+        source: C:\Users\jking\Desktop\itar-data-platform\site-a\core-platform\ops\grafana\provisioning
+        target: /etc/grafana/provisioning
+        read_only: true
+        bind:
+          create_host_path: true
+  loki:
+    command:
+      - -config.file=/etc/loki/config.yml
+    container_name: loki
+    image: grafana/loki:2.9.10
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 3100
+        published: "3100"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\Users\jking\Desktop\itar-data-platform\site-a\core-platform\ops\loki\config.yml
+        target: /etc/loki/config.yml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: loki-data
+        target: /loki
+        volume: {}
+  minio:
+    command:
+      - server
+      - /data
+      - --console-address
+      - :9001
+    container_name: minio
+    environment:
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: minioadmin
+      MINIO_DOMAIN: minio
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    networks:
+      itar-core:
+        aliases:
+          - warehouse.minio
+    ports:
+      - mode: ingress
+        target: 9000
+        published: "9000"
+        protocol: tcp
+      - mode: ingress
+        target: 9001
+        published: "9001"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: minio-data
+        target: /data
+        volume: {}
+  prometheus:
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    container_name: prometheus
+    image: prom/prometheus:v2.54.1
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 9090
+        published: "9090"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\Users\jking\Desktop\itar-data-platform\site-a\core-platform\ops\prometheus\prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: prometheus-data
+        target: /prometheus
+        volume: {}
+  promtail:
+    command:
+      - -config.file=/etc/promtail/config.yml
+    container_name: promtail
+    depends_on:
+      loki:
+        condition: service_started
+        required: true
+    image: grafana/promtail:2.9.10
+    networks:
+      itar-core: null
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\Users\jking\Desktop\itar-data-platform\site-a\core-platform\ops\promtail\config.yml
+        target: /etc/promtail/config.yml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/lib/docker/containers
+        target: /var/lib/docker/containers
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: true
+  redpanda-1:
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "2"
+      - --memory
+      - 2G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "1"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda-1:9092,OUTSIDE://localhost:19092
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - redpanda-1:33145
+    container_name: redpanda-1
+    image: redpandadata/redpanda:v23.3.17
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 19092
+        published: "19092"
+        protocol: tcp
+      - mode: ingress
+        target: 9644
+        published: "9644"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: rp1-data
+        target: /var/lib/redpanda/data
+        volume: {}
+  redpanda-2:
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "2"
+      - --memory
+      - 2G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "2"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda-2:9092
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - redpanda-2:33145
+      - --seeds
+      - redpanda-1:33145
+    container_name: redpanda-2
+    depends_on:
+      redpanda-1:
+        condition: service_started
+        required: true
+    image: redpandadata/redpanda:v23.3.17
+    networks:
+      itar-core: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: rp2-data
+        target: /var/lib/redpanda/data
+        volume: {}
+  redpanda-3:
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "2"
+      - --memory
+      - 2G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "3"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda-3:9092
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - redpanda-3:33145
+      - --seeds
+      - redpanda-1:33145
+    container_name: redpanda-3
+    depends_on:
+      redpanda-1:
+        condition: service_started
+        required: true
+    image: redpandadata/redpanda:v23.3.17
+    networks:
+      itar-core: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: rp3-data
+        target: /var/lib/redpanda/data
+        volume: {}
+  schema-registry:
+    container_name: schema-registry
+    depends_on:
+      redpanda-1:
+        condition: service_started
+        required: true
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://redpanda-1:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    image: confluentinc/cp-schema-registry:7.6.0
+    networks:
+      itar-core: null
+    ports:
+      - mode: ingress
+        target: 8081
+        published: "8081"
+        protocol: tcp
+    restart: unless-stopped
+networks:
+  itar-core:
+    name: core-platform_itar-core
+volumes:
+  grafana-data:
+    name: core-platform_grafana-data
+  loki-data:
+    name: core-platform_loki-data
+  minio-data:
+    name: core-platform_minio-data
+  prometheus-data:
+    name: core-platform_prometheus-data
+  rp1-data:
+    name: core-platform_rp1-data
+  rp2-data:
+    name: core-platform_rp2-data
+  rp3-data:
+    name: core-platform_rp3-data

@@ -1,0 +1,58 @@
+services:
+  iceberg-rest:
+    image: tabulario/iceberg-rest:0.5.0
+    container_name: iceberg-rest
+    restart: unless-stopped
+    environment:
+      CATALOG_WAREHOUSE: s3://lakehouse/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_PATH_STYLE_ACCESS: "true"
+    ports:
+      - "8181:8181"
+    networks:
+      - itar-core
+
+  trino:
+    image: trinodb/trino:440
+    container_name: trino
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+    depends_on:
+      - iceberg-rest
+    networks:
+      - itar-core
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9009:9000"
+    networks:
+      - itar-core
+
+  timescaledb:
+    image: timescale/timescaledb:2.14.2-pg16
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ChangeMe_Timescale_123!
+      POSTGRES_USER: itar
+      POSTGRES_DB: telemetry
+    ports:
+      - "5432:5432"
+    networks:
+      - itar-core
+
+networks:
+  itar-core:
+    external: true
+    name: core-platform_itar-core
