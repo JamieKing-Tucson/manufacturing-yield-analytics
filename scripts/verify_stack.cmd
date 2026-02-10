@@ -26,8 +26,8 @@ call :CHECK "Trino" "http://localhost:18080/v1/info" FAIL
 call :TRINO_SMOKE_QUERY
 call :CHECK "Kafka Connect" "http://localhost:8083/connectors" FAIL
 
-REM ---- Kafka Connect connector/task status ----
-call :CONNECTOR_CHECK "iceberg-sink"
+REM ---- Kafka Connect: auto-check ALL connectors ----
+call :CONNECTOR_CHECK_ALL
 
 call :CHECK "MinIO" "http://localhost:9000/minio/health/live" FAIL
 call :CHECK "MinIO Console" "http://localhost:9001" WARN
@@ -66,6 +66,45 @@ echo [WARN] %~1 not responding (may be disabled or different port)
 echo.
 exit /b 0
 
+:CONNECTOR_CHECK_ALL
+echo ---- Connect status (ALL connectors) ----
+
+REM Get connector list JSON: ["iceberg-sink","other-connector"]
+%CURL% "http://localhost:8083/connectors" > "%TEMP%\connectors.json" 2>nul
+if errorlevel 1 goto CONNECTORS_WARN
+
+REM Read the single-line JSON into LIST
+set "LIST="
+for /f "usebackq delims=" %%L in ("%TEMP%\connectors.json") do set "LIST=%%L"
+
+REM Clean it: remove brackets/quotes/spaces, turn commas into spaces
+set "LIST=%LIST:[=%"
+set "LIST=%LIST:]=%"
+set "LIST=%LIST:"=%"
+set "LIST=%LIST: =%"
+set "LIST=%LIST:,= %"
+
+REM If empty list, warn
+if "%LIST%"=="" goto CONNECTORS_EMPTY
+
+REM For each connector name, run the per-connector check
+for %%C in (%LIST%) do call :CONNECTOR_CHECK "%%~C"
+
+echo [PASS] Connector sweep complete
+echo.
+exit /b 0
+
+:CONNECTORS_WARN
+echo [WARN] Could not list connectors from Kafka Connect
+echo        Try: curl http://localhost:8083/connectors
+echo.
+exit /b 0
+
+:CONNECTORS_EMPTY
+echo [WARN] Kafka Connect returned no connectors (none deployed yet)
+echo.
+exit /b 0
+
 :CONNECTOR_CHECK
 REM %1 = connector name
 set "CONN=%~1"
@@ -82,8 +121,8 @@ echo.
 exit /b 0
 
 :CONNECTOR_WARN
-echo [WARN] Could not fetch connector status for %CONN% (check name or Connect auth)
-echo        Tip: run curl http://localhost:8083/connectors to list connector names
+echo [WARN] Could not fetch connector status for %CONN%
+echo        Run: curl http://localhost:8083/connectors/%CONN%/status
 echo.
 exit /b 0
 
