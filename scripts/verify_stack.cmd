@@ -23,9 +23,10 @@ set "CURL=curl -sS -f --max-time 5"
 
 call :CHECK "Grafana" "http://localhost:3000/api/health" FAIL
 call :CHECK "Trino" "http://localhost:18080/v1/info" FAIL
+call :TRINO_SMOKE_QUERY
 call :CHECK "Kafka Connect" "http://localhost:8083/connectors" FAIL
 
-REM ---- 7) Kafka Connect connector/task status ----
+REM ---- Kafka Connect connector/task status ----
 call :CONNECTOR_CHECK "iceberg-sink"
 
 call :CHECK "MinIO" "http://localhost:9000/minio/health/live" FAIL
@@ -89,5 +90,31 @@ exit /b 0
 :CONNECTOR_FAIL
 echo [FAIL] Kafka Connect connector %CONN% has FAILED state/task(s)
 echo        Run: curl http://localhost:8083/connectors/%CONN%/status
+echo.
+exit /b 0
+
+:TRINO_SMOKE_QUERY
+echo ---- Trino smoke query (SELECT 1) ----
+
+curl -sS -f -X POST ^
+  -H "X-Trino-User: %USERNAME%" ^
+  -H "Content-Type: text/plain" ^
+  --max-time 5 ^
+  --data "SELECT 1" ^
+  http://localhost:18080/v1/statement >nul 2>&1
+
+if errorlevel 1 goto TRINO_SMOKE_FAIL
+
+echo [PASS] Trino accepted query
+echo.
+exit /b 0
+
+:TRINO_SMOKE_FAIL
+echo [FAIL] Trino did not accept query
+echo        Possible causes:
+echo          - Auth header missing or misconfigured
+echo          - JVM / memory issue
+echo          - Coordinator not fully ready
+echo        Try: docker logs trino --tail 200
 echo.
 exit /b 0
